@@ -1,44 +1,43 @@
-# Modbus Connection Manager
+# Modbus Service (Spring Boot 2.7 / Java 8)
 
-A small Java library providing a robust Modbus connection manager based on Apache PLC4X (plc4j). It supports Modbus TCP and RTU-over-TCP via connection strings such as:
+A minimal Spring Boot 2.7 service scaffolded for Java 8 under the base package `com.example.modbus`.
 
-- `modbus:tcp://192.168.1.10:502?unit-identifier=1`
-
-Features:
-- Automatic reconnect with exponential backoff and jitter
-- Configurable request timeouts and retries
-- Health checks (connected/connecting/closed and last error)
-- Typed helpers for reading/writing coils and registers
+Includes:
+- Packages: `config`, `modbus`, `service`, `api`, `model`
+- Dependencies: Spring Web, Actuator, Micrometer Prometheus Registry, Jackson, Validation
+- JSON logging via Logback + logstash encoder
+- Application configuration (application.yml)
+- Hello endpoint and health endpoint, plus Actuator endpoints exposed
 
 ## Requirements
-- Java 11+
-- Maven 3.8+
+- Java 8+
+- Bash (to use the Maven Wrapper)
 
-## Usage
+## Getting Started
 
-```
-ModbusConfig config = ModbusConfig.builder("modbus:tcp://192.168.1.10:502?unit-identifier=1")
-        .requestTimeout(Duration.ofSeconds(5))
-        .maxRetries(3)
-        .initialBackoff(Duration.ofMillis(250))
-        .maxBackoff(Duration.ofSeconds(10))
-        .jitter(0.2)
-        .build();
+Build and run using the Maven Wrapper:
 
-ModbusConnectionManager manager = new ModbusConnectionManager(config);
-manager.start();
-
-boolean coil1 = manager.readCoil(1);
-int hr100 = manager.readHoldingRegister(100);
-manager.writeCoil(5, true);
-manager.writeHoldingRegister(10, 1234);
-
-HealthStatus health = manager.health();
-System.out.println("Status: " + health.getStatus());
-
-manager.close();
+```bash
+# from repo root
+./mvnw spring-boot:run
 ```
 
-## Notes
-- This library depends on Apache PLC4X `plc4j-api` and `plc4j-driver-modbus`.
-- Connection strings are passed through to PLC4X as-is, so you can use any PLC4X-supported Modbus options, including unit identifiers for Modbus TCP and RTU-over-TCP scenarios.
+Or build a fat jar and run it:
+
+```bash
+./mvnw clean package
+java -jar target/modbus-service-0.0.1-SNAPSHOT.jar
+```
+
+The service will start on port 8080 by default. Key endpoints:
+- `GET /api/hello` — returns a JSON greeting. Optional query param `name`.
+- `GET /api/health` — simple application health response.
+- `GET /actuator/health` — Actuator health endpoint.
+- `GET /actuator/prometheus` — Prometheus scrape endpoint.
+
+## Configuration
+All configuration is in `src/main/resources/application.yml`.
+
+## Logging
+Logs are JSON-formatted using Logback with the logstash encoder. See `src/main/resources/logback-spring.xml`.
+
