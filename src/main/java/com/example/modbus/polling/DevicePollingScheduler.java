@@ -81,15 +81,14 @@ public final class DevicePollingScheduler implements Closeable {
         }
         long initialDelay = Math.max(0L, config.getInitialDelay().toMillis());
 
-        DevicePollContext context = new DevicePollContext(config);
+        DevicePollContext context = new DevicePollContext(config, meterRegistry);
         DevicePollContext existing = contexts.putIfAbsent(config.getDeviceId(), context);
         if (existing != null) {
             throw new IllegalArgumentException("Device already registered: " + config.getDeviceId());
         }
 
-        config.getConnectionManager().start();
-
         try {
+            config.getConnectionManager().start();
             ScheduledFuture<?> future = executor.scheduleAtFixedRate(
                     () -> executePoll(context),
                     initialDelay,
@@ -296,7 +295,7 @@ public final class DevicePollingScheduler implements Closeable {
         final Counter backpressureCounter;
         volatile ScheduledFuture<?> future;
 
-        DevicePollContext(DevicePollingConfig config) {
+        DevicePollContext(DevicePollingConfig config, MeterRegistry registry) {
             this.config = config;
             this.orderedDefinitions = config.getMeasurements();
             if (orderedDefinitions.isEmpty()) {
@@ -306,7 +305,6 @@ public final class DevicePollingScheduler implements Closeable {
             if (batches.isEmpty()) {
                 throw new IllegalArgumentException("No measurement batches created for device " + config.getDeviceId());
             }
-            MeterRegistry registry = DevicePollingScheduler.this.meterRegistry;
             if (registry != null) {
                 this.pollTimer = Timer.builder("modbus.poll.duration")
                         .description("Duration of Modbus polling cycles")
