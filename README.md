@@ -9,6 +9,9 @@ Features:
 - Configurable request timeouts and retries
 - Health checks (connected/connecting/closed and last error)
 - Typed helpers for reading/writing coils and registers
+- Scheduled polling per device with automatic batching of adjacent addresses
+- Measurement events published through an in-memory event bus
+- Micrometer-based metrics exportable via a Prometheus HTTP endpoint
 
 ## Requirements
 - Java 11+
@@ -37,6 +40,37 @@ HealthStatus health = manager.health();
 System.out.println("Status: " + health.getStatus());
 
 manager.close();
+```
+
+## Polling, Events, and Metrics
+
+```java
+PrometheusMetricsServer metricsServer = new PrometheusMetricsServer(8080);
+MeasurementEventBus eventBus = new InMemoryMeasurementEventBus();
+DevicePollingScheduler scheduler = new DevicePollingScheduler(metricsServer.getRegistry(), eventBus);
+
+eventBus.subscribe(event -> {
+    System.out.println("Received measurements from " + event.getDeviceId());
+    event.getSamples().forEach(sample ->
+            System.out.println(" - " + sample.getDefinition().getId() + " = " + sample.getValue()));
+});
+
+ModbusConnectionManager pollingManager = new ModbusConnectionManager(config, metricsServer.getRegistry());
+DevicePollingConfig pollConfig = DevicePollingConfig.builder("device-1", pollingManager)
+        .pollInterval(Duration.ofSeconds(5))
+        .addMeasurement(MeasurementDefinition.holdingRegister("hr100", 100))
+        .addMeasurement(MeasurementDefinition.holdingRegister("hr101", 101))
+        .addMeasurement(MeasurementDefinition.coil("coil2", 2))
+        .build();
+
+scheduler.registerDevice(pollConfig);
+```
+
+Remember to stop the scheduler and metrics server when finished:
+
+```
+scheduler.close();
+metricsServer.close();
 ```
 
 ## Notes
