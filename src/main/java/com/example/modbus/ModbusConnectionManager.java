@@ -1,5 +1,7 @@
 package com.example.modbus;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.plc4x.java.api.PlcConnection;
 import org.apache.plc4x.java.PlcDriverManager;
 import org.apache.plc4x.java.api.exceptions.PlcConnectionException;
@@ -31,6 +33,8 @@ public class ModbusConnectionManager implements Closeable {
 
     private final ModbusConfig config;
 
+    private final Counter reconnectCounter;
+
     private final ScheduledExecutorService scheduler;
     private final Random jitterRandom = new Random();
 
@@ -44,8 +48,18 @@ public class ModbusConnectionManager implements Closeable {
     private final PlcDriverManager driverManager;
 
     public ModbusConnectionManager(ModbusConfig config) {
+        this(config, null);
+    }
+
+    public ModbusConnectionManager(ModbusConfig config, MeterRegistry meterRegistry) {
         this.config = Objects.requireNonNull(config);
         this.driverManager = new PlcDriverManager();
+        this.reconnectCounter = meterRegistry != null
+                ? Counter.builder("modbus.connection.reconnects")
+                .description("Number of times a Modbus connection has been (re)established")
+                .tag("connection", config.getConnectionString())
+                .register(meterRegistry)
+                : null;
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "modbus-conn-manager");
             t.setDaemon(true);
@@ -121,6 +135,9 @@ public class ModbusConnectionManager implements Closeable {
                     lastConnectedAt.set(Instant.now());
                     lastError.set(null);
                     reconnectAttempts.set(0);
+                    if (reconnectCounter != null) {
+                        reconnectCounter.increment();
+                    }
                     return;
                 } else {
                     throw new PlcConnectionException("Connection not established");
